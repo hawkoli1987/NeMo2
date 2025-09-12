@@ -18,6 +18,8 @@ import torch
 from nemo.utils import logging
 from nemo.utils.import_utils import safe_import_from
 
+# Safely import transformer_engine.pytorch module, 
+# make sure code doesn't break if transformer_engine is not installed
 te, HAVE_TE = safe_import_from("transformer_engine", "pytorch")
 
 from dataclasses import dataclass
@@ -51,9 +53,14 @@ def te_accelerate(model, fp8_autocast=False):
 
 @torch.no_grad
 def _apply_basic_module_replacement(model):
+    """
+    recursively replace all Linear and Norm modules with TE's accelerated modules
+    """
+
     for name, module in model.named_children():
         if isinstance(module, torch.nn.Linear):
             has_bias = module.bias is not None
+            # Skip Linear layers with dimensions not divisible by 16 (Tensor Core alignment requirement)
             if any(p % 16 != 0 for p in module.weight.shape):
                 continue
             te_module = te.Linear(
@@ -98,7 +105,7 @@ def is_te_accelerated(model):
 
 def apply_fp8_autocast(model, fp8_recipe_handler=None):
     """
-    Applies TE's autocast
+    Applies TE's autocast, always defaults to delayed scaling
     Args:
         model: HF model
         fp8_recipe_handler: fpt handler

@@ -1036,7 +1036,7 @@ class ModelPT(LightningModule, Model):
 
                 # For every item in the result dictionary
                 for k, v in dataloader_logs.items():
-                    # If the key is `log`
+                    # If the key is `log`, default case
                     if k == 'log':
                         # Parse every element of the log, and attach the prefix name of the data loader
                         log_dict = {}

@@ -61,7 +61,27 @@ def configure_no_restart_validation_training_loop(trainer: pl.Trainer) -> None:
 
 class Trainer(pl.Trainer, IOMixin):
     def add_io(self, obj):
-        """Recurse to the leaves of a container and add io functionality to non-serializable leaves"""
+        """
+        Recursively traverse a container and add I/O functionality to non-serializable objects.
+        
+        This method ensures that all objects within a data structure (dict, list, or nested
+        combinations) have proper serialization support for saving and loading. It recursively
+        processes containers and adds I/O tracking to leaf objects that don't already have
+        serialization capabilities.
+        
+        Args:
+            obj: The object to process. Can be a dict, list, or any other object type.
+                - If dict/list: recursively processes each item
+                - If leaf object: adds I/O tracking if not already present
+        
+        Returns:
+            None: This method modifies objects in-place by adding I/O functionality.
+        
+        Example:
+            >>> trainer = Trainer()
+            >>> config = {"model": SomeModel(), "optimizer": SomeOptimizer()}
+            >>> trainer.add_io(config)  # Now all objects in config have I/O support
+        """
         if isinstance(obj, (dict, list)):
             if isinstance(obj, dict):
                 obj = obj.values()
@@ -73,6 +93,28 @@ class Trainer(pl.Trainer, IOMixin):
             return
 
     def io_init(self, **kwargs) -> fdl.Config[Self]:
+        """
+        Initialize I/O functionality for the trainer and return a configuration object.
+        
+        This method creates a deep copy of all provided arguments to avoid modifying
+        the original objects, then adds I/O support to all copied objects. The result
+        is a Fiddle configuration object that can be used to recreate the trainer
+        with the same parameters.
+        
+        Args:
+            **kwargs: Arbitrary keyword arguments that will be used to configure
+                     the trainer. Each argument is deep copied to prevent side effects.
+        
+        Returns:
+            fdl.Config[Self]: A Fiddle configuration object that can be used to
+                            recreate this trainer instance with the same parameters.
+                            The configuration includes all I/O-enabled objects.
+        
+        Example:
+            >>> trainer = Trainer(devices=4, accelerator="gpu")
+            >>> config = trainer.io_init(devices=4, accelerator="gpu")
+            >>> # config can now be saved/loaded and used to recreate the trainer
+        """
         # Each argument of the trainer can be stateful so we copy them
         cfg_kwargs = {k: deepcopy(v) for k, v in kwargs.items()}
 
@@ -80,6 +122,9 @@ class Trainer(pl.Trainer, IOMixin):
         return fdl.Config(type(self), **cfg_kwargs)
 
     def to_fabric(self, callbacks=None, loggers=None) -> Fabric:
+        """
+        Convert the trainer to a Fabric object.
+        """
         accelerator, devices, strategy, plugins, num_nodes = None, None, None, None, None
         if hasattr(self.__io__, "devices"):
             devices = self.__io__.devices
